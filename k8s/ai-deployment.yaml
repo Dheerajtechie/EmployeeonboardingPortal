@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: onboard-ai-service
+  labels:
+    app: onboard-ai-service
+    tier: ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: onboard-ai-service
+  template:
+    metadata:
+      labels:
+        app: onboard-ai-service
+        tier: ai
+    spec:
+      containers:
+        - name: ai-service
+          image: onboard-ai-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+              protocol: TCP
+          env:
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ai-secrets
+                  key: groq-api-key
+            - name: GROQ_MODEL
+              value: "llama-3.3-70b-versatile"
+            - name: ORACLE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: username
+            - name: ORACLE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: oracle-credentials
+                  key: password
+            - name: ORACLE_DSN
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: oracle-dsn
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /chatbot/health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /chatbot/health
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5

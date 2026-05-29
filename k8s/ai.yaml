@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: onboard-ai
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: onboard-ai
+  template:
+    metadata:
+      labels:
+        app: onboard-ai
+    spec:
+      containers:
+        - name: ai-service
+          image: onboard-ai:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: GROQ_API_KEY
+              value: 'your_api_key_here'
+            - name: DB_HOST
+              value: 'oracle-service'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: onboard-ai-svc
+spec:
+  selector:
+    app: onboard-ai
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP

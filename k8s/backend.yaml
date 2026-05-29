@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: onboard-backend
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: onboard-backend
+  template:
+    metadata:
+      labels:
+        app: onboard-backend
+    spec:
+      containers:
+        - name: backend
+          image: onboard-backend:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: SECRET_KEY
+              value: 'onboard_secret_key_2024_wipro'
+            - name: DB_HOST
+              value: 'oracle-service'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: onboard-backend-svc
+spec:
+  selector:
+    app: onboard-backend
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
