@@ -19,20 +19,21 @@ def setup_database():
         admin_conn = oracledb.connect(user=ADMIN_USER, password=ADMIN_PASSWORD, dsn=DSN)
         cursor = admin_conn.cursor()
 
-        print(f"Creating user {APP_USER}...")
-        try:
-            cursor.execute(f"CREATE USER {APP_USER} IDENTIFIED BY {APP_PASSWORD}")
-        except oracledb.DatabaseError as e:
-            error, = e.args
-            if error.code == 1920: # ORA-01920: user name conflicts with another user or role name
-                print(f"User {APP_USER} already exists. Skipping user creation.")
-            else:
-                raise
+        if APP_USER.upper() != 'SYSTEM':
+            print(f"Creating user {APP_USER}...")
+            try:
+                cursor.execute(f"CREATE USER {APP_USER} IDENTIFIED BY {APP_PASSWORD}")
+            except oracledb.DatabaseError as e:
+                error, = e.args
+                if error.code == 1920: # ORA-01920: user name conflicts with another user or role name
+                    print(f"User {APP_USER} already exists. Skipping user creation.")
+                else:
+                    raise
 
-        print(f"Granting privileges to {APP_USER}...")
-        cursor.execute(f"GRANT CONNECT, RESOURCE, DBA TO {APP_USER}")
-        cursor.execute(f"GRANT UNLIMITED TABLESPACE TO {APP_USER}")
-        
+            print(f"Granting privileges to {APP_USER}...")
+            cursor.execute(f"GRANT CONNECT, RESOURCE, DBA TO {APP_USER}")
+            cursor.execute(f"GRANT UNLIMITED TABLESPACE TO {APP_USER}")
+            
         admin_conn.commit()
         cursor.close()
         admin_conn.close()
@@ -40,6 +41,7 @@ def setup_database():
         print(f"Connecting as app user ({APP_USER}) to create tables...")
         app_conn = oracledb.connect(user=APP_USER, password=APP_PASSWORD, dsn=DSN)
         app_cursor = app_conn.cursor()
+
 
         tables_sql = [
             """

@@ -10,9 +10,11 @@ def auto_assign_tasks_and_trainings(conn, user_id: int, department_id: int, join
     
     for task in tasks:
         task_id, due_days = task
+        from datetime import timedelta
+        due_date = joining_date + timedelta(days=due_days)
         cursor.execute(
-            "INSERT INTO TASK_ASSIGNMENTS (task_id, user_id, status, due_date) VALUES (:1, :2, 'Pending', :3 + :4)",
-            [task_id, user_id, joining_date, due_days]
+            "INSERT INTO TASK_ASSIGNMENTS (task_id, user_id, status, due_date) VALUES (:1, :2, 'Pending', :3)",
+            [task_id, user_id, due_date]
         )
         
     # Assign mandatory trainings

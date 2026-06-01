@@ -9,7 +9,7 @@ class UserBase(BaseModel):
     department_id: Optional[int] = None
 
 class UserCreate(UserBase):
-    pass
+    joining_date: datetime
 
 class UserLogin(BaseModel):
     email: EmailStr
