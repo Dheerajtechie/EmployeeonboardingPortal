@@ -1,7 +1,9 @@
 import React from 'react';
 import { Clock, CheckCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const TaskCard = ({ task, isLast, onComplete }) => {
+  const navigate = useNavigate();
   return (
     <div style={{
       padding: '14px 0',
@@ -22,6 +24,20 @@ const TaskCard = ({ task, isLast, onComplete }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-success)', fontSize: '13px', fontWeight: '500' }}>
             <CheckCircle size={16} /> Completed
           </div>
+        ) : task.category === 'Document' ? (
+          <button 
+            onClick={() => navigate('/new-hire/documents')} 
+            className="btn btn-sm" style={{ border: '1px solid var(--color-border)', backgroundColor: 'transparent' }}
+          >
+            Upload Document
+          </button>
+        ) : task.category === 'Training' ? (
+          <button 
+            onClick={() => navigate('/new-hire/trainings')} 
+            className="btn btn-sm" style={{ border: '1px solid var(--color-border)', backgroundColor: 'transparent' }}
+          >
+            Go to Trainings
+          </button>
         ) : (
           <button 
             onClick={() => onComplete(task.task_id)} 

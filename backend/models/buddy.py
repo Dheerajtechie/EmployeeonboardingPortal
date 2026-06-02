@@ -29,5 +29,16 @@ class CheckinCreate(BaseModel):
 class CheckinResponse(CheckinCreate):
     checkin_id: int
     created_at: datetime
-    
     model_config = ConfigDict(from_attributes=True)
+
+class BuddyMeetingCreate(BaseModel):
+    buddy_id: int
+    meeting_date: datetime
+
+class BuddyMeetingFeedback(BaseModel):
+    meeting_notes: str
+    effectiveness_score: int
+
+class BuddyMessage(BaseModel):
+    recipient_id: int
+    message: str

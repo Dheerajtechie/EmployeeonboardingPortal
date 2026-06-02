@@ -9,33 +9,51 @@ const BuddyDashboard = () => {
   const { user } = useContext(AuthContext);
   const [mentees, setMentees] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showCheckin, setShowCheckin] = useState(null);
+  const [meetings, setMeetings] = useState([]);
+  const [showCheckin, setShowCheckin] = useState(null); // stores meeting object
   const [checkinNotes, setCheckinNotes] = useState('');
-  const [checkins, setCheckins] = useState([]);
+  const [effectivenessScore, setEffectivenessScore] = useState(10);
+  const [showMessage, setShowMessage] = useState(null); // stores mentee object
+  const [messageText, setMessageText] = useState("");
 
-  useEffect(() => { fetchMentees(); }, []);
 
-  const fetchMentees = async () => {
+  useEffect(() => { fetchMenteesAndMeetings(); }, []);
+
+  const fetchMenteesAndMeetings = async () => {
     try {
-      // Get all new hires to check who is assigned
-      const res = await api.get('/admin/onboarding-status');
+      const res = await api.get('/buddy/assigned');
       setMentees(res.data);
+      const mRes = await api.get('/buddy/meetings/assigned');
+      setMeetings(mRes.data);
     } catch (err) {
       console.error(err);
     } finally { setLoading(false); }
   };
 
-  const handleCheckin = async (buddyId) => {
+  const handleFeedback = async (meetingId) => {
     try {
-      await api.post('/buddy/checkin', {
-        buddy_id: buddyId,
-        notes: checkinNotes,
-        checkin_date: new Date().toISOString().split('T')[0]
+      await api.put(`/buddy/meetings/${meetingId}/feedback`, {
+        meeting_notes: checkinNotes,
+        effectiveness_score: effectivenessScore
       });
       setShowCheckin(null);
       setCheckinNotes('');
-      alert('Check-in logged successfully!');
-    } catch (err) { alert('Failed to log check-in'); }
+      setEffectivenessScore(10);
+      fetchMenteesAndMeetings();
+      alert('Feedback logged successfully!');
+    } catch (err) { alert('Failed to log feedback'); }
+  };
+
+  const handleSendMessage = async (menteeId) => {
+    try {
+      await api.post('/buddy/message', {
+        recipient_id: menteeId,
+        message: messageText
+      });
+      setShowMessage(null);
+      setMessageText("");
+      alert("Message sent to mentee successfully!");
+    } catch (err) { alert("Failed to send message"); }
   };
 
   return (
@@ -76,6 +94,13 @@ const BuddyDashboard = () => {
                     </div>
                   </div>
 
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                    <button onClick={() => setShowMessage(mentee)} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                      <MessageSquare size={14} /> Message
+                    </button>
+                  </div>
+
                   {/* Progress */}
                   <div style={{ marginBottom: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
@@ -86,11 +111,18 @@ const BuddyDashboard = () => {
                       <div className="progress-bar-fill" style={{ width: `${mentee.completion_percentage || 0}%` }} />
                     </div>
                   </div>
-
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => setShowCheckin(mentee)} className="btn btn-sm btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
-                      <MessageSquare size={14} /> Log Check-in
-                    </button>
+                  <div style={{ marginTop: '16px' }}>
+                    <h4 style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginBottom: '8px' }}>Upcoming Meetings</h4>
+                    {meetings.filter(m => m.new_hire_id === mentee.user_id && m.status === 'Scheduled').length === 0 ? (
+                        <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>No upcoming meetings</div>
+                    ) : (
+                        meetings.filter(m => m.new_hire_id === mentee.user_id && m.status === 'Scheduled').map((m, idx) => (
+                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--color-surface-hover)', padding: '8px', borderRadius: '4px', marginBottom: '4px' }}>
+                                <span style={{ fontSize: '13px' }}>{new Date(m.meeting_date).toLocaleDateString()}</span>
+                                <button onClick={() => setShowCheckin(m)} className="btn btn-sm btn-primary" style={{ padding: '4px 8px', fontSize: '11px' }}>Log Feedback</button>
+                            </div>
+                        ))
+                    )}
                   </div>
                 </div>
               ))}
@@ -105,21 +137,51 @@ const BuddyDashboard = () => {
               zIndex: 1000
             }}>
               <div className="card animate-slide-up" style={{ width: '450px' }}>
-                <h3 style={{ marginBottom: '4px' }}>Log Check-in</h3>
+                <h3 style={{ marginBottom: '4px' }}>Submit Meeting Feedback</h3>
                 <p style={{ color: 'var(--color-text-muted)', marginBottom: '16px', fontSize: '14px' }}>
-                  Check-in notes for {showCheckin.name}
+                  Feedback for meeting on {new Date(showCheckin.meeting_date).toLocaleDateString()}
                 </p>
+                <div style={{ marginBottom: '12px' }}>
+                    <label className="form-label">Effectiveness Score (1-10)</label>
+                    <input type="number" min="1" max="10" className="form-input" value={effectivenessScore} onChange={(e) => setEffectivenessScore(parseInt(e.target.value))} />
+                </div>
                 <textarea
                   value={checkinNotes}
                   onChange={(e) => setCheckinNotes(e.target.value)}
                   className="form-input"
                   rows={4}
-                  placeholder="How was your session? Any concerns or progress to note..."
+                  placeholder="How was the session? Any concerns or progress to note..."
                 />
                 <div style={{ display: 'flex', gap: '12px', marginTop: '16px', justifyContent: 'flex-end' }}>
-                  <button onClick={() => { setShowCheckin(null); setCheckinNotes(''); }} className="btn btn-secondary">Cancel</button>
-                  <button onClick={() => handleCheckin(1)} className="btn btn-primary">
+                  <button onClick={() => { setShowCheckin(null); setCheckinNotes(''); setEffectivenessScore(10); }} className="btn btn-secondary">Cancel</button>
+                  <button onClick={() => handleFeedback(showCheckin.meeting_id)} className="btn btn-primary">
                     <Send size={14} /> Submit
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Message Modal */}
+          {showMessage && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              zIndex: 1000
+            }}>
+              <div className="card animate-slide-up" style={{ width: '450px' }}>
+                <h3 style={{ marginBottom: '16px' }}>Send Message to {showMessage.name}</h3>
+                <textarea
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  className="form-input"
+                  rows={4}
+                  placeholder="Type your message here..."
+                />
+                <div style={{ display: 'flex', gap: '12px', marginTop: '16px', justifyContent: 'flex-end' }}>
+                  <button onClick={() => { setShowMessage(null); setMessageText(''); }} className="btn btn-secondary">Cancel</button>
+                  <button onClick={() => handleSendMessage(showMessage.user_id)} className="btn btn-primary">
+                    <Send size={14} /> Send Message
                   </button>
                 </div>
               </div>

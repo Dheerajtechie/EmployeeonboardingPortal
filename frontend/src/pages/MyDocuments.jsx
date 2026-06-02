@@ -12,6 +12,7 @@ import {
 const DOC_TYPES = [
   'Aadhaar Card',
   'PAN Card',
+  'Offer Letter',
   'Degree Certificate',
   'Passport Photo',
   'Bank Details',

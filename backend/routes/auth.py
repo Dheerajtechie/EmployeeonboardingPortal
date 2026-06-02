@@ -5,8 +5,14 @@ from services.auth_service import verify_password, get_password_hash, create_acc
 from services.task_service import auto_assign_tasks_and_trainings
 from datetime import datetime
 import oracledb
+from services.auth_service import token_blacklist, oauth2_scheme
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+@router.post("/logout")
+def logout(token: str = Depends(oauth2_scheme)):
+    token_blacklist.add(token)
+    return {"message": "Logged out successfully"}
 
 @router.post("/login")
 def login(user_data: UserLogin, conn = Depends(db.get_db)):
@@ -30,25 +36,25 @@ def register_new_hire(user: UserCreate, conn = Depends(db.get_db), current_user 
     # Check if email exists
     cursor.execute("SELECT user_id FROM USERS WHERE email = :1", [user.email])
     if cursor.fetchone():
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="A user with this email is already registered.")
         
     # Create temp password
     temp_password = "temp123!"
     hashed_pwd = get_password_hash(temp_password)
-    joining_date = datetime.now()
     
     try:
         out_val = cursor.var(int)
         cursor.execute(
-            "INSERT INTO USERS (name, email, password_hash, role, department_id, joining_date) VALUES (:1, :2, :3, :4, :5, :6) RETURNING user_id INTO :7",
-            [user.name, user.email, hashed_pwd, user.role, user.department_id, joining_date, out_val]
+            "INSERT INTO USERS (name, email, password_hash, role, department_id, joining_date) VALUES (:1, :2, :3, :4, :5, TO_DATE(:6, 'YYYY-MM-DD')) RETURNING user_id INTO :7",
+            [user.name, user.email, hashed_pwd, user.role, user.department_id, user.joining_date.isoformat(), out_val]
         )
         
         user_id = out_val.getvalue()[0]
         
         # Auto-assign tasks and trainings
-        auto_assign_tasks_and_trainings(conn, user_id, user.department_id, joining_date)
+        auto_assign_tasks_and_trainings(conn, user_id, user.department_id, user.joining_date)
         
+        conn.commit()
         return {"message": "User created successfully", "user_id": user_id, "temp_password": temp_password}
     except Exception as e:
         conn.rollback()

@@ -32,6 +32,14 @@ BEGIN EXECUTE IMMEDIATE 'CREATE SEQUENCE checkin_seq    START WITH 1 INCREMENT B
 /
 BEGIN EXECUTE IMMEDIATE 'CREATE SEQUENCE faq_seq        START WITH 1 INCREMENT BY 1 NOCACHE'; EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
+BEGIN EXECUTE IMMEDIATE 'CREATE SEQUENCE timeline_seq   START WITH 1 INCREMENT BY 1 NOCACHE'; EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'CREATE SEQUENCE notif_seq      START WITH 1 INCREMENT BY 1 NOCACHE'; EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'CREATE SEQUENCE audit_seq      START WITH 1 INCREMENT BY 1 NOCACHE'; EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
+/
+
+
 
 -- ===================== TABLES ===============================
 
@@ -53,7 +61,9 @@ CREATE TABLE users (
     department_id   NUMBER          REFERENCES departments(department_id),
     joining_date    DATE,
     is_active       NUMBER(1)       DEFAULT 1,
-    created_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP
+    created_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
+    onboarding_status VARCHAR2(50)  DEFAULT 'In Progress',
+    risk_level      VARCHAR2(20)    DEFAULT 'Low'
 );
 
 -- FK from departments back to users (deferred via ALTER)
@@ -79,7 +89,9 @@ CREATE TABLE task_assignments (
     status           VARCHAR2(20)    DEFAULT 'Pending',
     due_date         DATE,
     completed_at     TIMESTAMP,
-    notes            VARCHAR2(300)
+    notes            VARCHAR2(300),
+    sla_due_date     DATE,
+    responsible_owner NUMBER         REFERENCES users(user_id)
 );
 
 -- 5. DOCUMENTS
@@ -92,7 +104,9 @@ CREATE TABLE documents (
     reviewed_by      NUMBER          REFERENCES users(user_id),
     rejection_reason VARCHAR2(300),
     uploaded_at      TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
-    reviewed_at      TIMESTAMP
+    reviewed_at      TIMESTAMP,
+    sla_due_date     DATE,
+    responsible_owner NUMBER         REFERENCES users(user_id)
 );
 
 -- 6. ASSETS
@@ -164,6 +178,42 @@ CREATE TABLE onboarding_faqs (
     answer           CLOB,
     category         VARCHAR2(100),
     keywords         VARCHAR2(300)
+);
+
+-- 13. ONBOARDING_TIMELINE
+CREATE TABLE onboarding_timeline (
+    event_id         NUMBER          DEFAULT timeline_seq.NEXTVAL  PRIMARY KEY,
+    user_id          NUMBER          NOT NULL REFERENCES users(user_id),
+    event_type       VARCHAR2(100)   NOT NULL,
+    action_taken     VARCHAR2(500)   NOT NULL,
+    status           VARCHAR2(50),
+    next_action      VARCHAR2(500),
+    responsible_owner NUMBER         REFERENCES users(user_id),
+    due_date         DATE,
+    created_at       TIMESTAMP       DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 14. NOTIFICATIONS
+CREATE TABLE notifications (
+    notif_id         NUMBER          DEFAULT notif_seq.NEXTVAL PRIMARY KEY,
+    user_id          NUMBER          NOT NULL REFERENCES users(user_id),
+    type             VARCHAR2(100)   NOT NULL,
+    message          VARCHAR2(500)   NOT NULL,
+    action_link      VARCHAR2(500),
+    is_read          NUMBER(1)       DEFAULT 0,
+    created_at       TIMESTAMP       DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 15. AUDIT_TRAIL
+CREATE TABLE audit_trail (
+    audit_id         NUMBER          DEFAULT audit_seq.NEXTVAL PRIMARY KEY,
+    entity_type      VARCHAR2(100)   NOT NULL,
+    entity_id        NUMBER          NOT NULL,
+    action           VARCHAR2(100)   NOT NULL,
+    old_value        VARCHAR2(500),
+    new_value        VARCHAR2(500),
+    changed_by       NUMBER          REFERENCES users(user_id),
+    created_at       TIMESTAMP       DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ===================== INDEXES ==============================

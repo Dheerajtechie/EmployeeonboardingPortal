@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import api from '../services/api';
 import axios from 'axios';
 
 const ChatWidget = () => {
@@ -26,7 +27,7 @@ const ChatWidget = () => {
     setIsLoading(true);
 
     try {
-      const res = await axios.post('http://localhost:5000/chatbot/ask', {
+      const res = await axios.post('/chatbot/ask', {
         query: text,
         user_id: user?.user_id
       });

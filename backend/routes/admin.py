@@ -228,3 +228,136 @@ def get_pending_documents(conn = Depends(db.get_db), current_user: dict = Depend
             "uploaded_at": row[7],
         })
     return documents
+
+class DocumentReviewReq(BaseModel):
+    status: str
+    reason: Optional[str] = None
+
+@router.post("/documents/{doc_id}/review")
+def review_document(doc_id: int, req: DocumentReviewReq, conn = Depends(db.get_db), current_user: dict = Depends(require_role(["hr_admin"]))):
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE DOCUMENTS SET status = :1, reviewed_by = :2, reviewed_at = CURRENT_TIMESTAMP, rejection_reason = :3, updated_by = :2 WHERE doc_id = :4",
+        [req.status, current_user["user_id"], req.reason, doc_id]
+    )
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    if req.status == 'Rejected':
+        cursor.execute("SELECT user_id, doc_type FROM DOCUMENTS WHERE doc_id = :1", [doc_id])
+        doc_user, doc_type = cursor.fetchone()
+        cursor.execute(
+            "INSERT INTO NOTIFICATIONS (user_id, type, message, action_link, metadata) VALUES (:1, 'Document Rejected', :2, '/documents', :3)",
+            [doc_user, f"Your {doc_type} was rejected: {req.reason}", f'{{"doc_id": {doc_id}}}']
+        )
+    conn.commit()
+    return {"message": f"Document {req.status.lower()} successfully"}
+
+@router.get("/users")
+def get_all_users(conn = Depends(db.get_db), current_user: dict = Depends(require_role(["hr_admin", "it_admin"]))):
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT u.user_id, u.name, u.email, u.role, d.name "
+        "FROM USERS u LEFT JOIN DEPARTMENTS d ON u.department_id = d.department_id "
+        "ORDER BY u.user_id DESC"
+    )
+    users = []
+    for row in cursor.fetchall():
+        users.append({
+            "user_id": row[0],
+            "name": row[1],
+            "email": row[2],
+            "role": row[3],
+            "department": row[4] or "Unassigned"
+        })
+    return users
+
+@router.delete("/users/{user_id}")
+def delete_user(user_id: int, conn = Depends(db.get_db), current_user: dict = Depends(require_role(["hr_admin"]))):
+    cursor = conn.cursor()
+    # Let constraints fail if user has dependencies, or we can just try to delete them
+    try:
+        # Delete related dependencies safely first
+        cursor.execute("DELETE FROM BUDDY_CHECKINS WHERE buddy_id IN (SELECT buddy_id FROM BUDDIES WHERE new_hire_id = :1 OR buddy_user_id = :1)", [user_id])
+        cursor.execute("DELETE FROM BUDDIES WHERE new_hire_id = :1 OR buddy_user_id = :1", [user_id])
+        cursor.execute("DELETE FROM TASK_ASSIGNMENTS WHERE user_id = :1", [user_id])
+        cursor.execute("DELETE FROM TRAINING_ASSIGNMENTS WHERE user_id = :1", [user_id])
+        cursor.execute("DELETE FROM DOCUMENTS WHERE user_id = :1", [user_id])
+        cursor.execute("DELETE FROM ASSET_ASSIGNMENTS WHERE user_id = :1", [user_id])
+        cursor.execute("DELETE FROM NOTIFICATIONS WHERE user_id = :1", [user_id])
+        
+        cursor.execute("DELETE FROM USERS WHERE user_id = :1", [user_id])
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+        conn.commit()
+        return {"message": "User deleted successfully"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+class AssetCreateReq(BaseModel):
+    name: str
+    serial_number: str
+    category: str
+    condition: str = 'New'
+
+@router.post("/assets")
+def create_asset(req: AssetCreateReq, conn = Depends(db.get_db), current_user: dict = Depends(require_role(["it_admin", "hr_admin"]))):
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO ASSETS (name, serial_number, category, condition) VALUES (:1, :2, :3, :4)",
+            [req.name, req.serial_number, req.category, req.condition]
+        )
+        conn.commit()
+        return {"message": "Asset created successfully"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/assets/{asset_id}")
+def delete_asset(asset_id: int, conn = Depends(db.get_db), current_user: dict = Depends(require_role(["it_admin", "hr_admin"]))):
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM ASSET_ASSIGNMENTS WHERE asset_id = :1", [asset_id])
+        cursor.execute("DELETE FROM ASSETS WHERE asset_id = :1", [asset_id])
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        conn.commit()
+        return {"message": "Asset deleted successfully"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/assets/{asset_id}/unassign")
+def unassign_asset(asset_id: int, conn = Depends(db.get_db), current_user: dict = Depends(require_role(["it_admin", "hr_admin"]))):
+    cursor = conn.cursor()
+    try:
+        # We find the active assignment and set returned_at or delete it.
+        # Simplest is to delete it to 'unassign'.
+        cursor.execute("DELETE FROM ASSET_ASSIGNMENTS WHERE asset_id = :1", [asset_id])
+        cursor.execute("UPDATE ASSETS SET status = 'Available' WHERE asset_id = :1", [asset_id])
+        conn.commit()
+        return {"message": "Asset unassigned successfully"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/departments/{dept_id}")
+def delete_department(dept_id: int, conn = Depends(db.get_db), current_user: dict = Depends(require_role(["hr_admin"]))):
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT COUNT(*) FROM USERS WHERE department_id = :1", [dept_id])
+        if cursor.fetchone()[0] > 0:
+            raise HTTPException(status_code=400, detail="Cannot delete department with assigned users")
+        
+        cursor.execute("DELETE FROM DEPARTMENTS WHERE department_id = :1", [dept_id])
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Department not found")
+        conn.commit()
+        return {"message": "Department deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

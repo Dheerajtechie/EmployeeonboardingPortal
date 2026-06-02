@@ -29,96 +29,130 @@ else:
 def get_db_connection():
     return oracledb.connect(user=ORACLE_USER, password=ORACLE_PASSWORD, dsn=ORACLE_DSN)
 
-def retrieve_context(query, user_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # 1. Fetch relevant FAQs based on simple keyword match
-    cursor.execute("SELECT question, answer FROM ONBOARDING_FAQS")
-    all_faqs = cursor.fetchall()
-    
-    relevant_faqs = []
-    query_lower = query.lower()
-    for q, a in all_faqs:
-        a_text = a.read() if hasattr(a, 'read') else a
-        if any(word in q.lower() or word in a_text.lower() for word in query_lower.split()):
-            relevant_faqs.append(f"Q: {q}\\nA: {a_text}")
+import numpy as np
+import faiss
+from sentence_transformers import SentenceTransformer
+
+# Initialize the embedder
+print("Loading sentence transformer model...")
+try:
+    embedder = SentenceTransformer('all-MiniLM-L6-v2')
+except Exception as e:
+    print(f"Warning: Failed to load embedder. {e}")
+    embedder = None
+
+faq_corpus = []
+faiss_index = None
+
+def load_faqs_into_faiss():
+    global faiss_index, faq_corpus
+    if not embedder:
+        return
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT question, answer, keywords FROM ONBOARDING_FAQS")
+        rows = cur.fetchall()
+        faq_corpus = []
+        texts_to_embed = []
+        for q, a, kw in rows:
+            a_text = a.read() if hasattr(a, 'read') else a
+            faq_corpus.append({"question": q, "answer": a_text})
+            text = f"{q} {kw if kw else ''}"
+            texts_to_embed.append(text)
             
-    # 2. Fetch pending tasks for this user
-    cursor.execute('''
-        SELECT t.title, ta.due_date 
-        FROM TASK_ASSIGNMENTS ta
-        JOIN ONBOARDING_TASKS t ON ta.task_id = t.task_id
-        WHERE ta.user_id = :1 AND ta.status = 'Pending'
-    ''', [user_id])
-    pending_tasks = cursor.fetchall()
-    
-    task_context = "\\n".join([f"- {title} (Due: {due.strftime('%Y-%m-%d')})" for title, due in pending_tasks])
-    faq_context = "\\n\\n".join(relevant_faqs[:3]) # Take top 3
-    
-    conn.close()
-    
-    return f"""
-    Context Info from HR Database:
-    
-    User's Pending Tasks:
-    {task_context if task_context else 'No pending tasks.'}
-    
-    Relevant Company FAQs:
-    {faq_context if faq_context else 'No specific policies found.'}
+        conn.close()
+        if texts_to_embed:
+            embeddings = embedder.encode(texts_to_embed)
+            dimension = len(embeddings[0])
+            faiss_index = faiss.IndexFlatL2(dimension)
+            faiss_index.add(np.array(embeddings, dtype=np.float32))
+            print(f"Loaded {len(faq_corpus)} FAQs into FAISS index.")
+    except Exception as e:
+        print(f"Failed to load FAQs into FAISS: {e}")
+
+load_faqs_into_faiss()
+
+def search_faqs(question, top_k=3):
     """
-
-
-def retrieve_context_data(query, user_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT question, answer FROM ONBOARDING_FAQS")
-    all_faqs = cursor.fetchall()
-
+    True Semantic RAG search using Faiss and Vector Embeddings
+    """
     relevant_faqs = []
-    query_lower = query.lower()
-    for q, a in all_faqs:
-        a_text = a.read() if hasattr(a, 'read') else a
-        if any(word in q.lower() or word in a_text.lower() for word in query_lower.split()):
-            relevant_faqs.append({"question": q, "answer": a_text})
+    if not faiss_index or not embedder or len(faq_corpus) == 0:
+        return relevant_faqs
+        
+    try:
+        q_emb = embedder.encode([question])
+        D, I = faiss_index.search(np.array(q_emb, dtype=np.float32), min(top_k, len(faq_corpus)))
+        for idx in I[0]:
+            if 0 <= idx < len(faq_corpus):
+                relevant_faqs.append(faq_corpus[idx])
+    except Exception as e:
+        print(f"Failed semantic search: {e}")
+        
+    return relevant_faqs
 
-    cursor.execute('''
-        SELECT t.title, ta.due_date 
-        FROM TASK_ASSIGNMENTS ta
-        JOIN ONBOARDING_TASKS t ON ta.task_id = t.task_id
-        WHERE ta.user_id = :1 AND ta.status = 'Pending'
-    ''', [user_id])
-    pending_tasks = cursor.fetchall()
-    conn.close()
-
-    return relevant_faqs, pending_tasks
-
+def get_user_realtime_context(user_id):
+    context = {
+        "tasks": [],
+        "trainings": [],
+        "buddy": {},
+        "assets": [],
+        "documents": []
+    }
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # 1. Pending Tasks
+        cursor.execute("SELECT t.title, ta.due_date FROM TASK_ASSIGNMENTS ta JOIN ONBOARDING_TASKS t ON ta.task_id = t.task_id WHERE ta.user_id = :1 AND ta.status = 'Pending'", [user_id])
+        context["tasks"] = [{"title": row[0], "due_date": str(row[1])[:10] if row[1] else "N/A"} for row in cursor.fetchall()]
+        
+        # 2. Trainings
+        cursor.execute("SELECT t.title, ta.status FROM TRAINING_ASSIGNMENTS ta JOIN TRAININGS t ON ta.training_id = t.training_id WHERE ta.user_id = :1", [user_id])
+        context["trainings"] = [{"title": row[0], "status": row[1]} for row in cursor.fetchall()]
+        
+        # 3. Assets
+        cursor.execute("SELECT a.name, a.category, aa.status FROM ASSET_ASSIGNMENTS aa JOIN ASSETS a ON aa.asset_id = a.asset_id WHERE aa.user_id = :1", [user_id])
+        context["assets"] = [{"name": row[0], "category": row[1], "status": row[2]} for row in cursor.fetchall()]
+        
+        # 4. Buddy
+        cursor.execute("SELECT u.name, u.email FROM BUDDIES b JOIN USERS u ON b.buddy_user_id = u.user_id WHERE b.new_hire_id = :1", [user_id])
+        buddy = cursor.fetchone()
+        if buddy:
+            context["buddy"] = {"name": buddy[0], "email": buddy[1]}
+            
+        # 5. Documents
+        cursor.execute("SELECT doc_type, status FROM DOCUMENTS WHERE user_id = :1", [user_id])
+        context["documents"] = [{"type": row[0], "status": row[1]} for row in cursor.fetchall()]
+        
+        conn.close()
+    except Exception as e:
+        print(f"Failed to fetch real-time context: {e}")
+    return context
 
 def generate_fallback_reply(query, relevant_faqs, pending_tasks):
-    query_lower = query.lower()
     messages = []
     if relevant_faqs:
         messages.append("I found these relevant policy answers:")
-        for faq in relevant_faqs[:3]:
+        for faq in relevant_faqs:
             messages.append(f"Q: {faq['question']}\nA: {faq['answer']}")
     if pending_tasks:
         messages.append("Here are your pending tasks:")
-        for title, due in pending_tasks:
-            messages.append(f"- {title} (Due: {due.strftime('%Y-%m-%d')})")
+        for t in pending_tasks:
+            messages.append(f"- {t['title']} (Due: {t['due_date']})")
 
     if not messages:
-        if any(keyword in query_lower for keyword in ['laptop', 'asset', 'email', 'credential', 'task', 'training', 'document', 'policy', 'faq', 'buddy']):
-            return (
-                "I couldn't find an exact match in company policy or your pending tasks, "
-                "but I can share general onboarding guidance. If this is about your laptop, documents, email, buddy assignment or training, "
-                "please contact your HR advisor or review your onboarding checklist."
-            )
         return (
             "I couldn't find a direct answer in the company records. "
             "Please ask a more specific question or contact your HR administrator."
         )
 
     return "\n\n".join(messages)
+
+@app.route("/chatbot/health", methods=["GET"])
+def health_check():
+    return jsonify({"status": "ok"})
 
 @app.route("/chatbot/ask", methods=["POST"])
 def ask_chatbot():
@@ -130,37 +164,68 @@ def ask_chatbot():
         return jsonify({"error": "Missing query or user_id"}), 400
         
     try:
-        context = retrieve_context(user_query, user_id)
-        relevant_faqs, pending_tasks = retrieve_context_data(user_query, user_id)
+        # Fetch real-time data from Oracle
+        relevant_faqs = search_faqs(user_query)
+        user_ctx = get_user_realtime_context(user_id)
+        
+        faq_context = "\n\n".join([f"Q: {f['question']}\nA: {f['answer']}" for f in relevant_faqs])
+        
+        rt_context = []
+        if user_ctx["tasks"]:
+            rt_context.append("Pending tasks: " + ", ".join([f"{t['title']} (Due {t['due_date']})" for t in user_ctx["tasks"]]))
+        if user_ctx["trainings"]:
+            rt_context.append("Trainings: " + ", ".join([f"{t['title']} ({t['status']})" for t in user_ctx["trainings"]]))
+        if user_ctx["buddy"]:
+            rt_context.append(f"Assigned Buddy: {user_ctx['buddy']['name']} ({user_ctx['buddy']['email']})")
+        if user_ctx["assets"]:
+            rt_context.append("IT Assets: " + ", ".join([f"{a['name']} ({a['status']})" for a in user_ctx["assets"]]))
+        if user_ctx["documents"]:
+            rt_context.append("Documents: " + ", ".join([f"{d['type']} ({d['status']})" for d in user_ctx["documents"]]))
+            
+        real_time_info = "\n".join(rt_context) if rt_context else "No real-time user data available."
+        
+        context = f"""
+        Company policy: {faq_context if faq_context else 'No specific policies found.'}
+        Real-time Employee Data (Current User): 
+        {real_time_info}
+        """
         
         system_prompt = f"""
-        You are an AI HR assistant for new employees. You are helpful, friendly, and concise.
-        Use the following retrieved context to answer the user's question accurately.
-        If the answer is not in the context, do your best to answer generally, but clarify you don't have company-specific details.
+        You are a friendly enterprise onboarding assistant for Wipro.
+        Your primary goal is to help new hires by providing accurate, personalized guidance.
         
+        <context>
         {context}
+        </context>
+        
+        CRITICAL RULES:
+        1. Base your answer ONLY on the provided Company Policy and Pending Tasks context.
+        2. If the user asks a question not covered by the context, politely state that you do not have that information and advise them to contact HR. DO NOT hallucinate answers.
+        3. Keep your tone encouraging and helpful.
+        
+        Question: {user_query}
+        Answer:
         """
 
         if groq_client is None:
-            fallback_reply = generate_fallback_reply(user_query, relevant_faqs, pending_tasks)
-            return jsonify({"reply": fallback_reply, "mode": "fallback"})
+            fallback_reply = generate_fallback_reply(user_query, relevant_faqs, user_ctx.get("tasks", []))
+            return jsonify({"reply": fallback_reply, "mode": "fallback (sql)"})
 
         try:
             completion = groq_client.chat.completions.create(
                 model="llama-3.1-8b-instant",
                 messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_query}
+                    {"role": "system", "content": system_prompt}
                 ],
                 temperature=0.3,
                 max_tokens=500
             )
             reply = completion.choices[0].message.content
-            return jsonify({"reply": reply, "mode": "groq"})
+            return jsonify({"reply": reply, "mode": "groq-rag-sql"})
         except Exception as e:
             print(f"Groq completion error: {e}")
-            fallback_reply = generate_fallback_reply(user_query, relevant_faqs, pending_tasks)
-            return jsonify({"reply": fallback_reply, "mode": "fallback", "warning": "Groq failed, using fallback response."})
+            fallback_reply = generate_fallback_reply(user_query, relevant_faqs, user_ctx.get("tasks", []))
+            return jsonify({"reply": fallback_reply, "mode": "fallback (sql)", "warning": "Groq failed."})
         
     except Exception as e:
         print(e)

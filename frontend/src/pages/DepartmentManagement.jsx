@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import api from '../services/api';
-import { Building, Plus, Loader2 } from 'lucide-react';
+import { Building, Plus, Loader2, Trash2 } from 'lucide-react';
 
 const DepartmentManagement = () => {
   const [departments, setDepartments] = useState([]);
@@ -31,6 +31,15 @@ const DepartmentManagement = () => {
       fetchDepts();
     } catch (err) { alert('Creation failed'); }
     finally { setCreating(false); }
+  };
+
+  const handleDelete = async (id) => {
+    if(confirm('Are you sure you want to delete this department?')) {
+      try {
+        await api.delete(`/admin/departments/${id}`);
+        fetchDepts();
+      } catch (err) { alert(err.response?.data?.detail || 'Delete failed'); }
+    }
   };
 
   return (
@@ -76,13 +85,14 @@ const DepartmentManagement = () => {
                   <th>Department</th>
                   <th>Description</th>
                   <th>ID</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan="3" style={{ textAlign: 'center', padding: '32px' }}>Loading...</td></tr>
+                  <tr><td colSpan="4" style={{ textAlign: 'center', padding: '32px' }}>Loading...</td></tr>
                 ) : departments.length === 0 ? (
-                  <tr><td colSpan="3" style={{ textAlign: 'center', padding: '48px', color: 'var(--color-text-muted)' }}>No departments. Create one to get started.</td></tr>
+                  <tr><td colSpan="4" style={{ textAlign: 'center', padding: '48px', color: 'var(--color-text-muted)' }}>No departments. Create one to get started.</td></tr>
                 ) : (
                   departments.map((d, i) => (
                     <tr key={i}>
@@ -100,6 +110,11 @@ const DepartmentManagement = () => {
                       </td>
                       <td style={{ color: 'var(--color-text-secondary)' }}>{d.description || '-'}</td>
                       <td style={{ fontFamily: 'monospace', color: 'var(--color-text-muted)' }}>{d.department_id || d.id}</td>
+                      <td>
+                        <button onClick={() => handleDelete(d.department_id || d.id)} className="btn btn-danger" style={{ padding: '6px 12px' }}>
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}

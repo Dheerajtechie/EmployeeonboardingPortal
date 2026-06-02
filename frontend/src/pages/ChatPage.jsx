@@ -32,7 +32,7 @@ const ChatPage = () => {
     setIsLoading(true);
 
     try {
-      const res = await axios.post('http://localhost:5000/chatbot/ask', {
+      const res = await axios.post('/chatbot/ask', {
         query: message,
         user_id: user?.user_id
       });

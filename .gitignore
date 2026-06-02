@@ -34,3 +34,11 @@ Thumbs.db
 
 # Extracted text
 extracted_pdf.txt
+
+# Virtual Environments
+venv/
+env/
+.env_venv/
+
+# Heavy Tools
+tools/

@@ -2,12 +2,16 @@ import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import api from '../services/api';
-import { Users, Mail, Phone, Calendar, MessageSquare, Video, CheckCircle } from 'lucide-react';
+import { Users, Mail, Phone, Calendar, MessageSquare, Video, CheckCircle, Send } from 'lucide-react';
 
 const MyBuddy = () => {
   const [buddy, setBuddy] = useState(null);
-  const [checkins, setCheckins] = useState([]);
+  const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [meetingDate, setMeetingDate] = useState("");
+  const [showMessage, setShowMessage] = useState(false);
+  const [messageText, setMessageText] = useState("");
 
   useEffect(() => { fetchBuddy(); }, []);
 
@@ -16,11 +20,42 @@ const MyBuddy = () => {
       const res = await api.get('/buddy/my');
       setBuddy(res.data);
       if (res.data?.buddy_id) {
-        const cRes = await api.get(`/buddy/checkins/${res.data.buddy_id}`);
-        setCheckins(cRes.data || []);
+        const cRes = await api.get(`/buddy/meetings/${res.data.buddy_id}`);
+        setMeetings(cRes.data || []);
       }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
+  };
+
+  const handleSchedule = async (e) => {
+      e.preventDefault();
+      try {
+          await api.post('/buddy/meetings', {
+              buddy_id: buddy.buddy_id,
+              meeting_date: new Date(meetingDate).toISOString()
+          });
+          setShowSchedule(false);
+          setMeetingDate("");
+          fetchBuddy();
+          alert("Meeting scheduled successfully");
+      } catch (err) {
+          alert("Failed to schedule meeting");
+      }
+  };
+
+  const handleSendMessage = async (e) => {
+      e.preventDefault();
+      try {
+          await api.post('/buddy/message', {
+              recipient_id: buddy.buddy_user_id,
+              message: messageText
+          });
+          setShowMessage(false);
+          setMessageText("");
+          alert("Message sent to your buddy successfully!");
+      } catch (err) {
+          alert("Failed to send message");
+      }
   };
 
   return (
@@ -77,31 +112,68 @@ const MyBuddy = () => {
 
                 {/* Action Buttons */}
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
+                  <button onClick={() => setShowMessage(true)} className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
                     <MessageSquare size={16} /> Message
                   </button>
-                  <button className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }}>
+                  <button onClick={() => setShowSchedule(!showSchedule)} className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }}>
                     <Video size={16} /> Schedule Meeting
                   </button>
                 </div>
+                
+                {showSchedule && (
+                    <form onSubmit={handleSchedule} style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+                        <input type="datetime-local" className="form-input" value={meetingDate} onChange={(e) => setMeetingDate(e.target.value)} required />
+                        <button type="submit" className="btn btn-primary">Confirm</button>
+                    </form>
+                )}
+
+                {showMessage && (
+                  <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 1000
+                  }}>
+                    <div className="card animate-slide-up" style={{ width: '450px' }}>
+                      <h3 style={{ marginBottom: '16px' }}>Send Message to {buddy.buddy_name}</h3>
+                      <textarea
+                        value={messageText}
+                        onChange={(e) => setMessageText(e.target.value)}
+                        className="form-input"
+                        rows={4}
+                        placeholder="Type your message here..."
+                      />
+                      <div style={{ display: 'flex', gap: '12px', marginTop: '16px', justifyContent: 'flex-end' }}>
+                        <button onClick={() => { setShowMessage(false); setMessageText(''); }} className="btn btn-secondary">Cancel</button>
+                        <button onClick={handleSendMessage} className="btn btn-primary">
+                          <Send size={14} /> Send Message
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Check-in History */}
               <div className="card">
                 <div className="card-header">
-                  <span className="card-title">Check-in History</span>
+                  <span className="card-title">Meeting History</span>
                 </div>
-                {checkins.length === 0 ? (
+                {meetings.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '32px', color: 'var(--color-text-muted)' }}>
-                    <MessageSquare size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
-                    <p>No check-ins yet. Your buddy will log notes after your sessions.</p>
+                    <Calendar size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
+                    <p>No meetings scheduled yet.</p>
                   </div>
                 ) : (
                   <div className="timeline">
-                    {checkins.map((c, i) => (
-                      <div key={i} className="timeline-item completed">
-                        <div className="timeline-title">{c.notes}</div>
-                        <div className="timeline-date">{new Date(c.checkin_date).toLocaleDateString()}</div>
+                    {meetings.map((c, i) => (
+                      <div key={i} className={`timeline-item ${c.status === 'Completed' ? 'completed' : 'pending'}`}>
+                        <div className="timeline-title">
+                            {c.status === 'Completed' ? 'Completed Meeting' : 'Upcoming Meeting'}
+                            <span className={`badge ${c.status==='Completed'?'badge-completed':'badge-pending'}`} style={{marginLeft:'8px'}}>{c.status}</span>
+                        </div>
+                        <div className="timeline-date">{new Date(c.meeting_date).toLocaleString()}</div>
+                        {c.meeting_notes && <div style={{ fontSize: '13px', marginTop: '8px', fontStyle: 'italic' }}>"{c.meeting_notes}"</div>}
+                        {c.effectiveness_score && <div style={{ fontSize: '12px', marginTop: '4px', color: 'var(--color-primary)' }}>Rating: {c.effectiveness_score}/10</div>}
                       </div>
                     ))}
                   </div>

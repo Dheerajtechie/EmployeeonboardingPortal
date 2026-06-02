@@ -1,9 +1,12 @@
 version: '3.8'
 services:
+
   frontend:
     build: ./frontend
     ports: ['3000:80']
     depends_on: [backend]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   backend:
     build: ./backend
@@ -11,13 +14,22 @@ services:
     volumes:
       - ./uploads:/app/uploads
     environment:
-      - DB_HOST=oracle-db
+      - DB_HOST=host.docker.internal
       - DB_PORT=1521
+      - ORACLE_DSN=host.docker.internal:1521/XEPDB1
       - SECRET_KEY=onboard_secret_key_2024_wipro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   ai-service:
     build: ./ai-service
     ports: ['5000:5000']
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - DB_HOST=oracle-db
+      - DB_HOST=host.docker.internal
+      - ORACLE_DSN=host.docker.internal:1521/XEPDB1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  oracle-data:

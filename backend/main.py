@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routes import auth, tasks, documents, assets, trainings, buddies, admin
+from routes import auth, tasks, documents, assets, trainings, buddies, admin, enterprise, notifications, reports
 
 app = FastAPI(title="AI-Powered Employee Onboarding Portal")
 
@@ -20,7 +20,15 @@ app.include_router(assets.router)
 app.include_router(trainings.router)
 app.include_router(buddies.router)
 app.include_router(admin.router)
+app.include_router(enterprise.router)
+app.include_router(notifications.router)
+app.include_router(reports.router)
 
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Onboarding Portal API"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+

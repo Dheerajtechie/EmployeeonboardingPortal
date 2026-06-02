@@ -4,7 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import {
   LayoutDashboard, CheckSquare, FileText, Monitor,
   GraduationCap, Users, MessageSquare, BarChart3,
-  Settings, ChevronRight
+  Settings, ChevronRight, AlertTriangle, Target, Bot
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -116,10 +116,19 @@ const Sidebar = () => {
           <>
             {sectionTitle('Overview')}
             <NavLink to="/hr/dashboard" style={() => linkStyle('/hr/dashboard')}>
-              <LayoutDashboard size={18} /> Dashboard
+              <LayoutDashboard size={18} /> Command Center
             </NavLink>
-            <NavLink to="/hr/tracker" style={() => linkStyle('/hr/tracker')}>
-              <CheckSquare size={18} /> Onboarding Tracker
+            <NavLink to="/hr/copilot" style={() => linkStyle('/hr/copilot')}>
+              <Bot size={18} /> AI Copilot
+            </NavLink>
+            <NavLink to="/hr/risk" style={() => linkStyle('/hr/risk')}>
+              <AlertTriangle size={18} /> Risk Monitoring
+            </NavLink>
+            <NavLink to="/hr/sla" style={() => linkStyle('/hr/sla')}>
+              <Target size={18} /> SLA Tracking
+            </NavLink>
+            <NavLink to="/hr/approvals" style={() => linkStyle('/hr/approvals')}>
+              <CheckSquare size={18} /> Approval Center
             </NavLink>
             {sectionTitle('Manage')}
             <NavLink to="/hr/documents" style={() => linkStyle('/hr/documents')}>

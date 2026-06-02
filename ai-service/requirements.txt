@@ -1,5 +1,8 @@
 flask==3.0.3
 flask-cors==4.0.0
-groq==0.4.2
+groq
+gunicorn==22.0.0
 oracledb==4.0.1
 python-dotenv==1.0.0
+sentence-transformers==3.0.1
+faiss-cpu

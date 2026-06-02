@@ -13,7 +13,7 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 def get_my_documents(conn = Depends(db.get_db), current_user: dict = Depends(require_role(["new_hire"]))):
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT doc_id, user_id, doc_type, file_path, status, reviewed_by, rejection_reason, uploaded_at, reviewed_at "
+        "SELECT doc_id, user_id, doc_type, file_path, status, reviewed_by, rejection_reason, uploaded_at, reviewed_at, expiration_date "
         "FROM DOCUMENTS WHERE user_id = :1", [current_user["user_id"]]
     )
     
@@ -28,7 +28,8 @@ def get_my_documents(conn = Depends(db.get_db), current_user: dict = Depends(req
             "reviewed_by": row[5],
             "rejection_reason": row[6],
             "uploaded_at": row[7],
-            "reviewed_at": row[8]
+            "reviewed_at": row[8],
+            "expiration_date": row[9]
         })
     return docs
 
@@ -54,14 +55,18 @@ async def upload_document(
     
     if existing:
         cursor.execute(
-            "UPDATE DOCUMENTS SET file_path = :1, status = 'Pending', uploaded_at = CURRENT_TIMESTAMP, rejection_reason = NULL WHERE doc_id = :2",
-            [filename, existing[0]]
+            "UPDATE DOCUMENTS SET file_path = :1, status = 'Under Review', uploaded_at = CURRENT_TIMESTAMP, rejection_reason = NULL, updated_by = :2 WHERE doc_id = :3",
+            [filename, current_user["user_id"], existing[0]]
         )
     else:
         cursor.execute(
-            "INSERT INTO DOCUMENTS (user_id, doc_type, file_path, status) VALUES (:1, :2, :3, 'Pending')",
-            [current_user["user_id"], doc_type, filename]
+            "INSERT INTO DOCUMENTS (user_id, doc_type, file_path, status, created_by) VALUES (:1, :2, :3, 'Under Review', :4)",
+            [current_user["user_id"], doc_type, filename, current_user["user_id"]]
         )
+        
+    # Auto-complete associated tasks
+    if doc_type in ['Aadhaar Card', 'PAN Card']:
+        cursor.execute("UPDATE TASK_ASSIGNMENTS SET status = 'Completed' WHERE user_id = :1 AND task_id = 1", [current_user["user_id"]])
         
     conn.commit()
     return {"message": "Document uploaded successfully", "file_path": filename}
@@ -70,7 +75,7 @@ async def upload_document(
 def verify_document(id: int, conn = Depends(db.get_db), current_user: dict = Depends(require_role(["hr_admin"]))):
     cursor = conn.cursor()
     cursor.execute(
-        "UPDATE DOCUMENTS SET status = 'Verified', reviewed_by = :1, reviewed_at = CURRENT_TIMESTAMP WHERE doc_id = :2",
+        "UPDATE DOCUMENTS SET status = 'Approved', reviewed_by = :1, reviewed_at = CURRENT_TIMESTAMP, updated_by = :1 WHERE doc_id = :2",
         [current_user["user_id"], id]
     )
     
@@ -84,12 +89,20 @@ def verify_document(id: int, conn = Depends(db.get_db), current_user: dict = Dep
 def reject_document(id: int, data: DocumentReject, conn = Depends(db.get_db), current_user: dict = Depends(require_role(["hr_admin"]))):
     cursor = conn.cursor()
     cursor.execute(
-        "UPDATE DOCUMENTS SET status = 'Rejected', reviewed_by = :1, reviewed_at = CURRENT_TIMESTAMP, rejection_reason = :2 WHERE doc_id = :3",
+        "UPDATE DOCUMENTS SET status = 'Rejected', reviewed_by = :1, reviewed_at = CURRENT_TIMESTAMP, rejection_reason = :2, updated_by = :1 WHERE doc_id = :3",
         [current_user["user_id"], data.reason, id]
     )
     
     if cursor.rowcount == 0:
         raise HTTPException(status_code=404, detail="Document not found")
         
+    # Trigger Re-upload notification
+    cursor.execute("SELECT user_id, doc_type FROM DOCUMENTS WHERE doc_id = :1", [id])
+    doc_user, doc_type = cursor.fetchone()
+    cursor.execute(
+        "INSERT INTO NOTIFICATIONS (user_id, type, message, action_link, metadata) VALUES (:1, 'Document Rejected', :2, '/documents', :3)",
+        [doc_user, f"Your {doc_type} was rejected: {data.reason}", f'{{"doc_id": {id}}}']
+    )
+
     conn.commit()
-    return {"message": "Document rejected"}
+    return {"message": "Document rejected and user notified"}

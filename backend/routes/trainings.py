@@ -10,7 +10,8 @@ def get_my_trainings(conn = Depends(db.get_db), current_user: dict = Depends(req
     cursor = conn.cursor()
     cursor.execute(
         "SELECT ta.ta_id, ta.training_id, ta.user_id, ta.status, ta.assigned_at, ta.completed_at, "
-        "t.title, t.description, t.duration_hours, t.resource_url, t.is_mandatory "
+        "t.title, t.description, t.duration_hours, t.resource_url, t.is_mandatory, "
+        "ta.started_at, ta.progress_percent, ta.certified_at, ta.expires_at "
         "FROM TRAINING_ASSIGNMENTS ta JOIN TRAININGS t ON ta.training_id = t.training_id "
         "WHERE ta.user_id = :1", [current_user["user_id"]]
     )
@@ -24,6 +25,10 @@ def get_my_trainings(conn = Depends(db.get_db), current_user: dict = Depends(req
             "status": row[3],
             "assigned_at": row[4],
             "completed_at": row[5],
+            "started_at": row[11],
+            "progress_percent": row[12],
+            "certified_at": row[13],
+            "expires_at": row[14],
             "training": {
                 "training_id": row[1],
                 "title": row[6],
@@ -35,15 +40,49 @@ def get_my_trainings(conn = Depends(db.get_db), current_user: dict = Depends(req
         })
     return trainings
 
+class TrainingProgress(BaseModel):
+    progress: int
+
+@router.put("/{ta_id}/progress")
+def update_training_progress(ta_id: int, data: TrainingProgress, current_user: dict = Depends(get_current_user)):
+    conn = db.get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE TRAINING_ASSIGNMENTS SET status = 'In Progress', progress_percent = :1, started_at = COALESCE(started_at, CURRENT_TIMESTAMP) WHERE ta_id = :2 AND user_id = :3",
+            [data.progress, ta_id, current_user['user_id']]
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Training assignment not found")
+        conn.commit()
+        return {"message": "Training progress updated"}
+    finally:
+        db.release_connection(conn)
+
 @router.put("/{ta_id}/complete")
 def complete_training(ta_id: int, current_user: dict = Depends(get_current_user)):
     conn = db.get_connection()
     try:
         cursor = conn.cursor()
+        
+        # Get training_id
+        cursor.execute("SELECT training_id FROM TRAINING_ASSIGNMENTS WHERE ta_id = :1 AND user_id = :2", [ta_id, current_user['user_id']])
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Training assignment not found")
+        training_id = row[0]
+        
         cursor.execute(
-            "UPDATE TRAINING_ASSIGNMENTS SET status = 'Completed', completed_at = CURRENT_TIMESTAMP WHERE ta_id = :1 AND user_id = :2",
+            "UPDATE TRAINING_ASSIGNMENTS SET status = 'Completed', progress_percent = 100, completed_at = CURRENT_TIMESTAMP, certified_at = CURRENT_TIMESTAMP, expires_at = CURRENT_DATE + 365 WHERE ta_id = :1 AND user_id = :2",
             [ta_id, current_user['user_id']]
         )
+        
+        # Auto-complete associated tasks
+        if training_id == 1:
+            cursor.execute("UPDATE TASK_ASSIGNMENTS SET status = 'Completed' WHERE user_id = :1 AND task_id = 4", [current_user["user_id"]])
+        elif training_id == 2:
+            cursor.execute("UPDATE TASK_ASSIGNMENTS SET status = 'Completed' WHERE user_id = :1 AND task_id = 3", [current_user["user_id"]])
+            
         conn.commit()
         return {"message": "Training completed"}
     finally:
@@ -77,10 +116,10 @@ def training_report(current_user=Depends(get_current_user)):
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT u.name, t.title, ta.status, ta.completed_at "
+            "SELECT u.name, t.title, ta.status, ta.completed_at, ta.progress_percent, ta.certified_at, ta.expires_at "
             "FROM TRAINING_ASSIGNMENTS ta JOIN USERS u ON ta.user_id = u.user_id "
             "JOIN TRAININGS t ON ta.training_id = t.training_id"
         )
-        return [{"employee": r[0], "training": r[1], "status": r[2], "completed_at": r[3]} for r in cursor.fetchall()]
+        return [{"employee": r[0], "training": r[1], "status": r[2], "completed_at": r[3], "progress_percent": r[4], "certified_at": r[5], "expires_at": r[6]} for r in cursor.fetchall()]
     finally:
         db.release_connection(conn)

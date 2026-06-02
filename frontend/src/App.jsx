@@ -3,6 +3,11 @@ import { useContext, Component } from 'react';
 import { AuthContext } from './context/AuthContext';
 import Login from './pages/Login';
 import HRDashboard from './pages/HRDashboard';
+import Employee360 from './pages/Employee360';
+import RiskMonitoring from './pages/RiskMonitoring';
+import SLATracking from './pages/SLATracking';
+import ApprovalCenter from './pages/ApprovalCenter';
+import AICopilot from './pages/AICopilot';
 import OnboardingTracker from './pages/OnboardingTracker';
 import DocumentReview from './pages/DocumentReview';
 import BuddyManagement from './pages/BuddyManagement';
@@ -107,6 +112,11 @@ function App() {
         
         {/* HR Admin Routes */}
         <Route path="/hr/dashboard" element={<PrivateRoute roles={['hr_admin']}><HRDashboard /></PrivateRoute>} />
+        <Route path="/hr/employee-360/:id" element={<PrivateRoute roles={['hr_admin']}><Employee360 /></PrivateRoute>} />
+        <Route path="/hr/risk" element={<PrivateRoute roles={['hr_admin']}><RiskMonitoring /></PrivateRoute>} />
+        <Route path="/hr/sla" element={<PrivateRoute roles={['hr_admin']}><SLATracking /></PrivateRoute>} />
+        <Route path="/hr/approvals" element={<PrivateRoute roles={['hr_admin']}><ApprovalCenter /></PrivateRoute>} />
+        <Route path="/hr/copilot" element={<PrivateRoute roles={['hr_admin']}><AICopilot /></PrivateRoute>} />
         <Route path="/hr/tracker" element={<PrivateRoute roles={['hr_admin']}><OnboardingTracker /></PrivateRoute>} />
         <Route path="/hr/documents" element={<PrivateRoute roles={['hr_admin']}><DocumentReview /></PrivateRoute>} />
         <Route path="/hr/buddies" element={<PrivateRoute roles={['hr_admin']}><BuddyManagement /></PrivateRoute>} />
