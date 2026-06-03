@@ -92,7 +92,9 @@ def search_faqs(question, top_k=3):
         
     return relevant_faqs
 
-def get_user_realtime_context(user_id):
+from typing import Any, Dict
+
+def get_user_realtime_context(user_id) -> Dict[str, Any]:
     context = {
         "tasks": [],
         "trainings": [],
