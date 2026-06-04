@@ -18,19 +18,19 @@ spec:
     spec:
       containers:
         - name: ai-service
-          image: onboard-ai-service:latest
+          image: onboard-ai:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000
               protocol: TCP
           env:
-            - name: GROQ_API_KEY
+            - name: XAI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: ai-secrets
-                  key: groq-api-key
-            - name: GROQ_MODEL
-              value: "llama-3.3-70b-versatile"
+                  name: app-secrets
+                  key: xai-api-key
+            - name: XAI_MODEL
+              value: "grok-beta"
             - name: ORACLE_USER
               valueFrom:
                 secretKeyRef:

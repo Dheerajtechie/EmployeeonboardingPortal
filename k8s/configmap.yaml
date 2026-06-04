@@ -3,4 +3,4 @@ kind: ConfigMap
 metadata:
   name: app-config
 data:
-  oracle-dsn: "host.minikube.internal:1521/XEPDB1"
+  oracle-dsn: "host.docker.internal:1521/XEPDB1"

@@ -38,4 +38,4 @@ The Employee Onboarding Portal exposes two distinct REST API services.
 - `GET /chatbot/health` - Ping check for K8s liveliness probes.
 - `POST /chatbot/ask` - The primary RAG endpoint.
   - **Payload:** `{ "query": "string", "user_id": "integer" }`
-  - **Behavior:** Fetches real-time user tasks and documents, embeds the query, searches FAISS, constructs a prompt, and yields a Groq Llama 3 completion.
+  - **Behavior:** Fetches real-time user tasks and documents, embeds the query, searches FAISS, constructs a prompt, and yields a Grok (xAI) completion.

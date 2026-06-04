@@ -1,6 +1,6 @@
 # AI-Powered Employee Onboarding Portal
 
-An enterprise-grade Employee Onboarding Portal built to streamline and automate the new hire integration process. This platform provides a centralized, secure, and intelligent ecosystem combining a React frontend, FastAPI core backend, Oracle relational database, and an AI-driven Chatbot Service powered by FAISS vector similarity and Groq LLMs.
+An enterprise-grade Employee Onboarding Portal built to streamline and automate the new hire integration process. This platform provides a centralized, secure, and intelligent ecosystem combining a React frontend, FastAPI core backend, Oracle relational database, and an AI-driven Chatbot Service powered by FAISS vector similarity and Grok (xAI) LLMs.
 
 ## Core Features
 1. **Multi-Role Dashboards**: Dedicated experiences for New Hires, HR Admins, IT Admins, and Buddies.
@@ -13,7 +13,7 @@ An enterprise-grade Employee Onboarding Portal built to streamline and automate 
 ## Architecture Stack
 - **Frontend**: React, Vite, Lucide-React
 - **Backend API**: FastAPI (Python), PyJWT
-- **AI Service**: Flask, FAISS, Sentence-Transformers, Groq
+- **AI Service**: Flask, FAISS, Sentence-Transformers, xAI (Grok)
 - **Database**: Oracle DB (cx_Oracle / oracledb)
 - **DevOps**: Docker, Docker-Compose, Kubernetes (Minikube), Jenkins
 

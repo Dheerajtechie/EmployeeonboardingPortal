@@ -31,10 +31,17 @@ pipeline {
         }
         stage('Deploy to Kubernetes') {
             steps {
+                bat 'kubectl apply -f k8s/secrets.yaml'
+                bat 'kubectl apply -f k8s/configmap.yaml'
+                bat 'kubectl apply -f k8s/backend-service.yaml'
+                bat 'kubectl apply -f k8s/frontend-service.yaml'
+                bat 'kubectl apply -f k8s/ai-service.yaml'
                 bat 'kubectl apply -f k8s/backend-deployment.yaml'
                 bat 'kubectl apply -f k8s/frontend-deployment.yaml'
                 bat 'kubectl apply -f k8s/ai-deployment.yaml'
                 bat 'kubectl rollout status deployment/onboard-backend'
+                bat 'kubectl rollout status deployment/onboard-frontend'
+                bat 'kubectl rollout status deployment/onboard-ai-service'
             }
         }
     }

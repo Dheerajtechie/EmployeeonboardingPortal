@@ -69,7 +69,7 @@ def assign_task_to_user(user_id: int, req: TaskAssignReq, current_user=Depends(g
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO TASK_ASSIGNMENTS (task_id, user_id, status, due_date) VALUES (:1, :2, 'Pending', CURRENT_DATE + 7)",
+            "INSERT INTO TASK_ASSIGNMENTS (assignment_id, task_id, user_id, status, due_date) VALUES (assignment_seq.nextval, :1, :2, 'Pending', CURRENT_DATE + 7)",
             [req.task_id, user_id]
         )
         conn.commit()

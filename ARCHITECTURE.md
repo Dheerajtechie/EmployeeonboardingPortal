@@ -15,7 +15,7 @@ graph TD
     
     Oracle[(Oracle Database)]
     FAISS[(FAISS Vector Index)]
-    Groq[(Groq LLM API)]
+    Grok[(xAI LLM API)]
     
     Client -->|HTTP/REST| subindex
     subindex -->|/api/*| FastAPI
@@ -24,7 +24,7 @@ graph TD
     FastAPI <-->|SQL / cx_Oracle| Oracle
     Flask <-->|SQL| Oracle
     Flask <-->|Semantic Search| FAISS
-    Flask <-->|Prompt Completion| Groq
+    Flask <-->|Prompt Completion| Grok
 ```
 
 ## Component Breakdown
@@ -44,7 +44,7 @@ graph TD
 - **Role**: Semantic RAG (Retrieval-Augmented Generation) Chatbot.
 - **Embedding**: Uses `sentence-transformers` (`all-MiniLM-L6-v2`) to embed `ONBOARDING_FAQS` directly into a local, in-memory FAISS vector index during startup.
 - **Context Injection**: Retrieves real-time pending tasks, active documents, and training statuses for the exact querying user from Oracle.
-- **Generation**: Formats the matched FAQ + user context into a strict system prompt and queries the Groq Llama 3 API for natural language responses. Features a robust fallback mechanism if Groq fails.
+- **Generation**: Formats the matched FAQ + user context into a strict system prompt and queries the Grok API (xAI) for natural language responses. Features a robust fallback mechanism if Grok fails.
 
 ### 4. Oracle Database
 - Relational schema defining strict dependencies (Foreign Keys) between USERS, ASSETS, DOCUMENTS, and TASKS.

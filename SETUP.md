@@ -23,7 +23,7 @@ ORACLE_USER=onboarding_user
 ORACLE_PASSWORD=onboarding123
 ORACLE_DSN=localhost:1521/XEPDB1
 JWT_SECRET=supersecret
-GROQ_API_KEY=your_groq_key
+XAI_API_KEY=your_xai_key
 ```
 
 ### 1.2 FastAPI Backend

@@ -11,7 +11,7 @@ conn = oracledb.connect(
     dsn=os.getenv("ORACLE_DSN", "localhost:1521/XEPDB1")
 )
 cur = conn.cursor()
-cur.execute("SELECT user_id FROM USERS WHERE email = 'melly@gmail.com'")
+cur.execute("SELECT user_id FROM USERS WHERE email = 'hire@portal.com'")
 uid = cur.fetchone()[0]
 conn.close()
 

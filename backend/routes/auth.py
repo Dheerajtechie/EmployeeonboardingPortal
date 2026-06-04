@@ -43,13 +43,13 @@ def register_new_hire(user: UserCreate, conn = Depends(db.get_db), current_user 
     hashed_pwd = get_password_hash(temp_password)
     
     try:
-        out_val = cursor.var(int)
-        cursor.execute(
-            "INSERT INTO USERS (name, email, password_hash, role, department_id, joining_date) VALUES (:1, :2, :3, :4, :5, TO_DATE(:6, 'YYYY-MM-DD')) RETURNING user_id INTO :7",
-            [user.name, user.email, hashed_pwd, user.role, user.department_id, user.joining_date.isoformat(), out_val]
-        )
+        cursor.execute("SELECT users_seq.nextval FROM DUAL")
+        user_id = cursor.fetchone()[0]
         
-        user_id = out_val.getvalue()[0]
+        cursor.execute(
+            "INSERT INTO USERS (user_id, name, email, password_hash, role, department_id, joining_date) VALUES (:1, :2, :3, :4, :5, :6, TO_DATE(:7, 'YYYY-MM-DD'))",
+            [user_id, user.name, user.email, hashed_pwd, user.role, user.department_id, user.joining_date.isoformat()]
+        )
         
         # Auto-assign tasks and trainings
         auto_assign_tasks_and_trainings(conn, user_id, user.department_id, user.joining_date)

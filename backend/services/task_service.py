@@ -14,7 +14,7 @@ def auto_assign_tasks_and_trainings(conn, user_id: int, department_id: int, join
         due_days_val = due_days if due_days is not None else 7
         due_date = joining_date + timedelta(days=due_days_val)
         cursor.execute(
-            "INSERT INTO TASK_ASSIGNMENTS (task_id, user_id, status, due_date) VALUES (:1, :2, 'Pending', :3)",
+            "INSERT INTO TASK_ASSIGNMENTS (assignment_id, task_id, user_id, status, due_date) VALUES (assignment_seq.nextval, :1, :2, 'Pending', :3)",
             [task_id, user_id, due_date]
         )
         
@@ -24,7 +24,7 @@ def auto_assign_tasks_and_trainings(conn, user_id: int, department_id: int, join
     for training in trainings:
         t_id = training[0]
         cursor.execute(
-            "INSERT INTO TRAINING_ASSIGNMENTS (training_id, user_id, status) VALUES (:1, :2, 'Pending')",
+            "INSERT INTO TRAINING_ASSIGNMENTS (ta_id, training_id, user_id, status) VALUES (ta_seq.nextval, :1, :2, 'Pending')",
             [t_id, user_id]
         )
         

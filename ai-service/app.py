@@ -2,8 +2,9 @@ import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import oracledb
-from groq import Groq
+from openai import OpenAI
 from dotenv import load_dotenv
+import numpy as np
 
 # Load env variables from parent directory
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
@@ -11,44 +12,49 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 app = Flask(__name__)
 CORS(app)
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+XAI_API_KEY = os.getenv("XAI_API_KEY")
 ORACLE_USER = os.getenv("ORACLE_USER", "onboarding_user")
 ORACLE_PASSWORD = os.getenv("ORACLE_PASSWORD", "onboarding123")
 ORACLE_DSN = os.getenv("ORACLE_DSN", "localhost:1521/XEPDB1")
 
-groq_client = None
-if GROQ_API_KEY:
+xai_client = None
+if XAI_API_KEY:
     try:
-        groq_client = Groq(api_key=GROQ_API_KEY)
+        xai_client = OpenAI(api_key=XAI_API_KEY, base_url="https://api.x.ai/v1")
     except Exception as e:
-        print(f"Failed to initialize Groq client: {e}")
-        groq_client = None
+        print(f"Failed to initialize xAI client: {e}")
+        xai_client = None
 else:
-    print("GROQ_API_KEY is not set. AI service will run in fallback mode.")
+    print("XAI_API_KEY is not set. AI service will run in fallback mode.")
 
 def get_db_connection():
     return oracledb.connect(user=ORACLE_USER, password=ORACLE_PASSWORD, dsn=ORACLE_DSN)
 
-import numpy as np
-import faiss
-from sentence_transformers import SentenceTransformer
+import threading
 
-# Initialize the embedder
-print("Loading sentence transformer model...")
-try:
-    embedder = SentenceTransformer('all-MiniLM-L6-v2')
-except Exception as e:
-    print(f"Warning: Failed to load embedder. {e}")
-    embedder = None
-
+# Initialize the embedder in the background
+embedder = None
 faq_corpus = []
 faiss_index = None
+
+def init_ai_models():
+    global embedder
+    print("Loading sentence transformer model in background...")
+    try:
+        from sentence_transformers import SentenceTransformer
+        embedder = SentenceTransformer('all-MiniLM-L6-v2')
+        load_faqs_into_faiss()
+    except Exception as e:
+        print(f"Warning: Failed to load embedder. {e}")
+        embedder = None
 
 def load_faqs_into_faiss():
     global faiss_index, faq_corpus
     if not embedder:
         return
     try:
+        import numpy as np
+        import faiss
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("SELECT question, answer, keywords FROM ONBOARDING_FAQS")
@@ -71,7 +77,8 @@ def load_faqs_into_faiss():
     except Exception as e:
         print(f"Failed to load FAQs into FAISS: {e}")
 
-load_faqs_into_faiss()
+threading.Thread(target=init_ai_models, daemon=True).start()
+
 
 def search_faqs(question, top_k=3):
     """
@@ -115,7 +122,7 @@ def get_user_realtime_context(user_id) -> Dict[str, Any]:
         context["trainings"] = [{"title": row[0], "status": row[1]} for row in cursor.fetchall()]
         
         # 3. Assets
-        cursor.execute("SELECT a.name, a.category, aa.status FROM ASSET_ASSIGNMENTS aa JOIN ASSETS a ON aa.asset_id = a.asset_id WHERE aa.user_id = :1", [user_id])
+        cursor.execute("SELECT a.name, a.category, CASE WHEN aa.confirmed_at IS NULL THEN 'Pending' ELSE 'Confirmed' END as status FROM ASSET_ASSIGNMENTS aa JOIN ASSETS a ON aa.asset_id = a.asset_id WHERE aa.user_id = :1", [user_id])
         context["assets"] = [{"name": row[0], "category": row[1], "status": row[2]} for row in cursor.fetchall()]
         
         # 4. Buddy
@@ -209,13 +216,13 @@ def ask_chatbot():
         Answer:
         """
 
-        if groq_client is None:
+        if xai_client is None:
             fallback_reply = generate_fallback_reply(user_query, relevant_faqs, user_ctx.get("tasks", []))
             return jsonify({"reply": fallback_reply, "mode": "fallback (sql)"})
 
         try:
-            completion = groq_client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+            completion = xai_client.chat.completions.create(
+                model="grok-beta",
                 messages=[
                     {"role": "system", "content": system_prompt}
                 ],
@@ -223,11 +230,11 @@ def ask_chatbot():
                 max_tokens=500
             )
             reply = completion.choices[0].message.content
-            return jsonify({"reply": reply, "mode": "groq-rag-sql"})
+            return jsonify({"reply": reply, "mode": "grok-rag-sql"})
         except Exception as e:
-            print(f"Groq completion error: {e}")
+            print(f"xAI completion error: {e}")
             fallback_reply = generate_fallback_reply(user_query, relevant_faqs, user_ctx.get("tasks", []))
-            return jsonify({"reply": fallback_reply, "mode": "fallback (sql)", "warning": "Groq failed."})
+            return jsonify({"reply": fallback_reply, "mode": "fallback (sql)", "warning": "xAI failed."})
         
     except Exception as e:
         print(e)

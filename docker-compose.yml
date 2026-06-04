@@ -25,7 +25,7 @@ services:
     build: ./ai-service
     ports: ['5000:5000']
     environment:
-      - GROQ_API_KEY=${GROQ_API_KEY}
+      - XAI_API_KEY=${XAI_API_KEY}
       - DB_HOST=host.docker.internal
       - ORACLE_DSN=host.docker.internal:1521/XEPDB1
     extra_hosts:
